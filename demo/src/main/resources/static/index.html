@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title>Chat WebSocket</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <script type="text/javascript">
+        var stompClient = null;
+
+        function setConnected(connected) {
+            document.getElementById('connect').disabled = connected;
+            document.getElementById('disconnect').disabled = !connected;
+            document.getElementById('conversationDiv').style.visibility
+                = connected ? 'visible' : 'hidden';
+            document.getElementById('response').innerHTML = '';
+            loadMessages();
+        }
+
+        function connect() {
+            var socket = new SockJS('/chat');
+            stompClient = Stomp.over(socket);
+            stompClient.connect({}, function(frame) {
+                setConnected(true);
+                console.log('Connected: ' + frame);
+                stompClient.subscribe('/webs/messages', function(messageOutput) {
+                    console.log(messageOutput, "output")
+                    showMessageOutput(JSON.parse(messageOutput.body));
+                });
+                stompClient.subscribe('/webs/delete', function() {
+                    clearMessages();
+                });
+            });
+        }
+
+        function disconnect() {
+            if(stompClient != null) {
+                stompClient.disconnect();
+            }
+            setConnected(false);
+            console.log("Disconnected");
+        }
+
+        function sendMessage() {
+            var from = document.getElementById('from').value;
+            var text = document.getElementById('text').value;
+            stompClient.send("/webs/chat", {},
+                JSON.stringify({'from':from, 'text':text}));
+        }
+        async function loadMessages() {
+            try {
+                const res = await fetch("/messages");
+                const data = await res.json()
+                showMessages(data)
+            } catch {}
+        }
+        async function deleteMessages() {
+            try {
+                await fetch("/messages", {method: "DELETE"})
+            } catch {}
+        }
+
+        function showMessages(messages) {
+            clearMessages();
+            for(let msg of messages) {
+                showMessageOutput(msg)
+            }
+        }
+        function clearMessages() {
+            var response = document.getElementById('response');
+            response.textContent = "";
+        }
+        function showMessageOutput(messageOutput) {
+            var response = document.getElementById('response');
+            var p = document.createElement('p');
+            p.style.wordWrap = 'break-word';
+            p.appendChild(document.createTextNode(messageOutput.username + ": "
+                + messageOutput.text + " (" + messageOutput.date + ")"));
+            response.appendChild(p);
+        }
+    </script>
+</head>
+<body onload="disconnect()">
+<div>
+    <div>
+        <input type="text" id="from" placeholder="Измените никнейм"/>
+    </div>
+    <br />
+    <div>
+        <button id="connect" onclick="connect();">Подключиться</button>
+        <button id="disconnect" disabled="disabled" onclick="disconnect();">
+            Отключиться
+        </button>
+    </div>
+    <br />
+    <div id="conversationDiv">
+        <div style="display: flex">
+            <input type="text" id="text" placeholder="Введите текст сообщения..."/>
+            <div style="display: flex">
+                <button id="sendMessage" onclick="sendMessage();">Отправить</button>
+                <button id="deleteMessages" onclick="deleteMessages();">Удалить все сообщения</button>
+                <button id="loadMessages" onclick="loadMessages();">Перезагрузить историю сообщений</button>
+            </div>
+        </div>
+        <div>
+            <p id="response"></p>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
